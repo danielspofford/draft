@@ -20,23 +20,30 @@ defmodule Mix.Tasks.Draft.Github do
   def run(argv) do
     with {:ok, {user_repo, opts}} <- parse_argv(argv),
          {:ok, {user, repo}} <- parse_user_repo(user_repo),
-         {:ok, path} <- make_dir(user, repo) do
-      user
-      |> clone(repo, path, is_empty?(path))
-      |> Draft.execute(opts)
+         {:ok, path} <- make_dir(user, repo),
+         :ok <- clone(user, repo, path, is_empty?(path)) do
+      Draft.execute(path, opts)
     else
       {:error, :user_repo} ->
         Mix.raise(~S(Expected user/repo to be given, please use "mix draft.github user/repo"))
 
       {:error, {:path, path}} ->
-        Mix.raise(~s(Failed while creating tmp dir to clone into: #{path}))
+        Mix.raise("Failed while creating tmp dir to clone into: #{path}")
+
+      {:error, {:clone, err, args, code}} ->
+        Mix.raise("""
+        Failed while cloning:
+          err: #{err}
+          args: #{args}
+          code: #{code}\
+        """)
     end
   end
 
   defp parse_argv(argv) do
     case OptionParser.parse(argv, switches: [dry: :boolean], allow_nonexistent_atoms: true) do
       {opts, [user_repo], []} -> {:ok, {user_repo, opts}}
-      {opts, [], []} -> {:error, :user_repo}
+      _ -> {:error, :user_repo}
     end
   end
 
@@ -58,12 +65,20 @@ defmodule Mix.Tasks.Draft.Github do
 
   defp clone(user, repo, path, is_empty?)
 
-  defp clone(user, repo, path, false), do: path
+  defp clone(_, _, path, false) do
+    Mix.shell().info("Using cached repo at: #{path}")
+    :ok
+  end
 
   defp clone(user, repo, path, true) do
     url = repo_url(user, repo)
-    {:ok, %Repository{path: path}} = Git.clone([url, path])
-    path
+    args = ["clone", url, path]
+    opts = [stderr_to_stdout: true]
+
+    case System.cmd("git", args, opts) do
+      {output, 0} -> :ok
+      {err, code} -> {:error, {:clone, err, args, code}}
+    end
   end
 
   defp make_dir(user, repo) do

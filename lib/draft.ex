@@ -24,11 +24,15 @@ defmodule Draft do
     opts = [dry: Keyword.get(raw_opts, :dry, false), bindings: bindings]
 
     case File.ls(root) do
-      {:error, :enoent} -> Mix.raise(~S(Missing template directory))
-      _ -> process_path(root, "", "", opts)
-    end
+      {:error, :enoent} ->
+        Mix.raise("Missing template directory")
 
-    :ok
+      _ ->
+        case process_path(root, "", "", opts) do
+          :ok -> Mix.shell().info("done: success")
+          :error -> Mix.shell().error("done: failure")
+        end
+    end
   end
 
   @spec process_path(Path.t(), Path.t(), Path.t(), [{:dry, boolean()}]) :: :ok
@@ -38,13 +42,22 @@ defmodule Draft do
 
     case File.ls(rooted_path) do
       {:ok, paths} ->
-        unless rooted_path == root do
-          mkdir(templated_path, opts)
-        end
+        dir? =
+          case rooted_path == root do
+            true -> true
+            false -> mkdir(templated_path, opts) == :ok
+          end
 
-        paths
-        |> Task.async_stream(&process_path(root, templated_path, &1, opts))
-        |> Stream.run()
+        if dir? do
+          paths
+          |> Task.async_stream(&process_path(root, templated_path, &1, opts))
+          |> Enum.reduce(:ok, fn
+            {:ok, :ok}, :ok -> :ok
+            _, _ -> :error
+          end)
+        else
+          :error
+        end
 
       {:error, :enotdir} ->
         rooted_path
@@ -54,32 +67,56 @@ defmodule Draft do
   end
 
   defp mkdir(dir, opts) do
-    case Keyword.get(opts, :dry, false) do
-      true -> IO.inspect({:mkdir, dir})
-      false -> File.mkdir!(dir)
+    with false <- Keyword.get(opts, :dry, false),
+         :ok <- File.mkdir(dir) do
+      :ok
+    else
+      true ->
+        Mix.shell().info("Create directory: #{dir}")
+        :ok
+
+      {:error, :eexist} ->
+        Mix.shell().error("Skipping directory (and contents) because it already exists: #{dir}")
+        :error
     end
   end
 
   defp cp(extname, source, dest, opts)
 
   defp cp(".eex", source, dest, opts) do
+    trimmed_dest = String.trim_trailing(dest, ".eex")
+
     case Keyword.get(opts, :dry, false) do
       true ->
-        IO.inspect({:cp_and_execute_template, {source, dest}})
+        Mix.shell().info("""
+        Copy and execute
+          source: #{source}
+          dest: #{trimmed_dest}\
+        """)
+
+        :ok
 
       false ->
         content = EEx.eval_file(source, Keyword.get(opts, :bindings, []))
-
-        dest
-        |> String.trim_trailing(".eex")
-        |> File.write!(content)
+        File.write!(trimmed_dest, content)
+        :ok
     end
   end
 
   defp cp(_, source, dest, opts) do
     case Keyword.get(opts, :dry, false) do
-      true -> IO.inspect({:cp, {source, dest}})
-      false -> File.cp!(source, dest)
+      true ->
+        Mix.shell().info("""
+        Copy
+          source: #{source}
+          dest: #{dest}\
+        """)
+
+        :ok
+
+      false ->
+        File.cp!(source, dest)
+        :ok
     end
   end
 end

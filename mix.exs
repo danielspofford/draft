@@ -20,8 +20,6 @@ defmodule Draft.MixProject do
 
   # Run "mix help deps" to learn about dependencies.
   defp deps do
-    [
-      {:git_cli, "~> 0.2"}
-    ]
+    []
   end
 end
