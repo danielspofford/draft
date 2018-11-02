@@ -9,6 +9,8 @@ defmodule Mix.Tasks.Draft.Github do
   ## Switches
 
   `--dry` - Print out what this run would have done, instead of actually doing it.
+
+  All other switches provided will be passed along as bindings while templating EEx files.
   """
 
   @shortdoc "Executes a template from a Github repo."
@@ -32,10 +34,9 @@ defmodule Mix.Tasks.Draft.Github do
   end
 
   defp parse_argv(argv) do
-    case OptionParser.parse(argv, strict: [dry: :boolean]) do
+    case OptionParser.parse(argv, switches: [dry: :boolean], allow_nonexistent_atoms: true) do
       {opts, [user_repo], []} -> {:ok, {user_repo, opts}}
       {opts, [], []} -> {:error, :user_repo}
-      {opts, args, errors} -> {:invalid_switchs, errors}
     end
   end
 

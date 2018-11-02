@@ -3,9 +3,25 @@ defmodule Draft do
   Facilitates command-line execution of arbitrary EEx templates and directories.
   """
 
+  @doc """
+  Recursively explore a path copying and templating its contents to the current working directory.
+
+  When encountering a
+  - Directory - Create that directory
+  - File - Copy that file
+  - EEx template - Copy and execute that template
+
+  ## Options
+
+  `:dry` - Print out what this run would have done, instead of actually doing it.
+
+  All other options provided will be passed along as bindings while templating EEX files.
+  """
   @spec execute(Path.t()) :: :ok
-  def execute(path, opts \\ []) do
+  def execute(path, raw_opts \\ []) do
     root = Path.join([path, "template"])
+    bindings = Keyword.drop(raw_opts, [:dry])
+    opts = [dry: Keyword.get(raw_opts, :dry, false), bindings: bindings]
 
     case File.ls(root) do
       {:error, :enoent} -> Mix.raise(~S(Missing template directory))
@@ -46,14 +62,17 @@ defmodule Draft do
 
   defp cp(extname, source, dest, opts)
 
-  defp cp("eex", source, dest, opts) do
+  defp cp(".eex", source, dest, opts) do
     case Keyword.get(opts, :dry, false) do
       true ->
         IO.inspect({:cp_and_execute_template, {source, dest}})
 
       false ->
-        content = EEx.eval_file(source, app_name: Keyword.fetch!(opts, :app_name))
-        File.write!(dest, content)
+        content = EEx.eval_file(source, Keyword.get(opts, :bindings, []))
+
+        dest
+        |> String.trim_trailing(".eex")
+        |> File.write!(content)
     end
   end
 
