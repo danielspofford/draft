@@ -5,30 +5,41 @@ defmodule Mix.Tasks.Draft.Github do
 
   @moduledoc """
   Executes a template identified by `user/repo`.
+
+  ## Switches
+
+  `--dry` - Print out what this run would have done, instead of actually doing it.
   """
 
   @shortdoc "Executes a template from a Github repo."
 
   @preferred_cli_env :dev
 
-  def run([user_repo | args]) do
-    with {:ok, {user, repo}} <- parse_user_repo(user_repo),
+  def run(argv) do
+    with {:ok, {user_repo, opts}} <- parse_argv(argv),
+         {:ok, {user, repo}} <- parse_user_repo(user_repo),
          {:ok, path} <- make_dir(user, repo) do
       user
       |> clone(repo, path, is_empty?(path))
-      |> Draft.execute()
+      |> Draft.execute(opts)
     else
       {:error, :user_repo} ->
-        user_repo_error()
+        Mix.raise(~S(Expected user/repo to be given, please use "mix draft.github user/repo"))
 
       {:error, {:path, path}} ->
         Mix.raise(~s(Failed while creating tmp dir to clone into: #{path}))
     end
   end
 
-  def run(_), do: user_repo_error()
+  defp parse_argv(argv) do
+    case OptionParser.parse(argv, strict: [dry: :boolean]) do
+      {opts, [user_repo], []} -> {:ok, {user_repo, opts}}
+      {opts, [], []} -> {:error, :user_repo}
+      {opts, args, errors} -> {:invalid_switchs, errors}
+    end
+  end
 
-  def parse_user_repo(user_repo) do
+  defp parse_user_repo(user_repo) do
     case String.split(user_repo, "/") do
       [user, repo] -> {:ok, {user, repo}}
       _ -> {:error, :user_repo}
@@ -65,8 +76,4 @@ defmodule Mix.Tasks.Draft.Github do
   end
 
   defp repo_url(user, repo), do: "https://github.com/#{user}/#{repo}"
-
-  defp user_repo_error do
-    Mix.raise(~S(Expected user/repo to be given, please use "mix draft.github user/repo"))
-  end
 end
