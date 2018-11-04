@@ -74,7 +74,7 @@ defmodule Mix.Tasks.Draft.Github do
     opts = [stderr_to_stdout: true]
 
     case System.cmd("git", args, opts) do
-      {output, 0} -> :ok
+      {_, 0} -> :ok
       {err, code} -> {:error, {:clone, err, args, code}}
     end
   end
