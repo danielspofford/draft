@@ -1,7 +1,5 @@
 defmodule Mix.Tasks.Draft.Github do
   use Mix.Task
-  alias Draft.Github
-  alias Git.Repository
 
   @moduledoc """
   Executes a template identified by `user/repo`.
